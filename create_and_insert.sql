@@ -99,9 +99,62 @@ ALTER TABLE akun DROP COLUMN jenis_akun;
 CREATE INDEX nasabah_yg_punya_akun ON akun(id_nasabah);
 SELECT id_nasabah FROM akun; 
 
--- update row using soft delete 
+update row using soft delete 
 UPDATE nasabah SET deleted_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id_nasabah=4;
 SELECT * FROM nasabah;
+
+-- stored procedures untuk update saldo
+create or replace function update_saldo(id_akun2 integer)
+returns double precision as $$
+declare 
+	-- variable to store transaction amount
+	transc_amount DOUBLE PRECISION;
+begin
+	-- init trans amount
+	transc_amount=0;
+	
+	-- calculate transaction amount
+	SELECT SUM(CASE WHEN jenis_transaksi = 1 THEN nominal_transaksi ELSE -nominal_transaksi END) INTO transc_amount
+	FROM transaksi
+	WHERE id_akun = id_akun2;
+	
+	-- update saldo
+	UPDATE akun
+	SET saldo= transc_amount
+	WHERE id_akun=id_akun2;
+	
+	return 0;
+END;
+$$ language plpgsql;
+
+SELECT update_saldo(1);
+SELECT id_akun, saldo FROM akun;
+
+-- CTE untuk menghitung jumlah nilai transaksi per akun (tidak update saldo)
+WITH TransaksiAkun AS(
+	SELECT 
+		id_akun,
+		SUM(CASE WHEN jenis_transaksi = 1 THEN nominal_transaksi ELSE -nominal_transaksi END) AS total_nominal_transaksi
+	FROM
+		transaksi
+	GROUP BY
+		id_akun
+)
+
+-- panggil CTE 
+SELECT 
+	ta.id_akun,
+	ta.total_nominal_transaksi,
+	CASE
+		WHEN ta.id_akun =1 THEN 'Pernah melakukan transaksi deposit dan withdraw'
+		ELSE 'Hanya melakukan withdraw'
+	END AS jenis_akun
+FROM 
+	TransaksiAkun ta;
+
+
+
+
 
 
 
